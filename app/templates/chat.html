@@ -1,0 +1,134 @@
+{% extends "layout.html" %}
+
+{% block title %}Chat Room{% endblock %}
+
+{% block navbar_padding %}{% endblock %}
+{% block navbar %}{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+    }
+
+    body {
+        background: #121212;
+        color: white;
+    }
+
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 90vh;
+        padding: 20px;
+    }
+
+    #chat-box {
+        flex: 1;
+        border: 1px solid #333;
+        padding: 10px;
+        overflow-y: scroll;
+        margin-bottom: 10px;
+        background: rgba(0,0,0,0.6);
+    }
+
+    #message-input {
+        padding: 10px;
+        width: 80%;
+    }
+
+    button {
+        padding: 10px;
+    }
+
+    #user-list {
+        margin-top: 10px;
+        background: rgba(0,0,0,0.6);
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    #user-list ul {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+
+    #user-list li {
+        padding: 2px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <h3>Room: {{ code }}</h3>
+    <div id="chat-box"></div>
+    <div id="user-list">
+        <strong>Users in room:</strong>
+        <ul id="user-list-items"></ul>
+    </div>
+    <div>
+        <input id="message-input" placeholder="Type a message..." autofocus>
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    <p><a href="#" id="leave-btn">Back to lobby</a></p>
+</div>
+
+<script>
+    const socket = io();
+    const username = "{{ username }}";
+    const room = "{{ code }}";
+
+    socket.emit('join_room', {'username': username, 'room': room});
+
+    socket.on('message', function(data) {
+        const chatBox = document.getElementById('chat-box');
+        chatBox.innerHTML += `<p>${data}</p>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+
+    socket.on('update_user_list', function(user_list) {
+        const userListElem = document.getElementById('user-list-items');
+        userListElem.innerHTML = "";
+        user_list.forEach(function(name) {
+            const li = document.createElement('li');
+            li.textContent = name;
+            userListElem.appendChild(li);
+        });
+    });
+
+    function sendMessage() {
+        const input = document.getElementById('message-input');
+        const message = input.value;
+        if (message.trim() !== "") {
+            socket.emit('send_message', {'username': username, 'room': room, 'message': message});
+            input.value = "";
+        }
+    }
+
+    // ✅ Listen for Enter key
+    document.getElementById('message-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent form submitting if inside form
+            sendMessage();
+        }
+    });
+
+    document.getElementById('leave-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        socket.emit('leave_room', {'username': username, 'room': room});
+        socket.disconnect();
+        setTimeout(() => {
+            window.location.href = "{{ url_for('lobby') }}";
+        }, 300);
+    });
+
+    window.onbeforeunload = function() {
+        socket.emit('leave_room', {'username': username, 'room': room});
+    };
+</script>
+{% endblock %}

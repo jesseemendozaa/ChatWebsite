@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block navbar_padding %}{% endblock %}
+{% block navbar %}{% endblock %}
+
+{% block head %}
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+    }
+
+    body {
+        background: #121212;
+        color: white;
+    }
+
+    .container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 90vh;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    a {
+        color: #0d6efd;
+    }
+
+    p.description {
+        max-width: 600px;
+        margin-top: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Welcome to SilentNoMore</h2>
+    <p class="description">
+        This website solves the issue when games don't have built-in voice or text chat. Share your room code and start communicating easily before and during your games!
+    </p>
+    <p><a href="{{ url_for('register') }}">Register</a> or <a href="{{ url_for('login') }}">Login</a> to start chatting with your friends.</p>
+</div>
+{% endblock %}
