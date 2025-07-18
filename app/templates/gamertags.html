@@ -1,0 +1,200 @@
+{% extends "layout.html" %}
+
+{% block title %}Gamertag Setup{% endblock %}
+{% block navbar_padding %}{% endblock %}
+{% block navbar %}{% endblock %}
+
+{% block head %}
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        background-color: black;
+        color: white;
+    }
+
+    .container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .form-container {
+        background-color: rgba(0, 0, 0, 0.9);
+        border-radius: 12px;
+        width: 70vw;
+        padding: 30px;
+        color: white;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+        text-align: center;
+        overflow-y: auto;
+        max-height: 90vh;
+    }
+
+    .game-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        justify-content: center;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .game-card {
+        cursor: pointer;
+        border: 3px solid transparent;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: 0.3s;
+        background-color: #1e1e1e;
+        max-width: 160px;
+        margin: 0 auto;
+    }
+
+    .game-card.selected {
+        border-color: #00bfff;
+    }
+
+    .game-card img {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+    }
+
+    .game-card-title {
+        padding: 8px;
+        font-size: 0.95rem;
+        background-color: #111;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+
+    .hidden-radio {
+        display: none;
+    }
+
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        justify-content: start;
+    }
+
+    .btn-primary {
+        margin-top: 20px;
+        padding: 10px 25px;
+        font-size: 1rem;
+        font-weight: 500;
+        background-color: #007bff;
+        border: none;
+        border-radius: 5px;
+        color: white;
+        transition: background-color 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        background-color: #0056b3;
+    }
+</style>
+
+<script>
+    function toggleInput(checkbox, inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        input.disabled = checkbox.checked;
+        if (checkbox.checked) {
+            input.value = document.getElementById("platform_gamertag_input").value;
+        }
+    }
+
+    function selectPlatform(value, card) {
+        document.querySelectorAll('.platform-card').forEach(c => {
+            c.classList.remove('selected');
+            c.querySelector('input[type="radio"]').checked = false;
+        });
+
+        card.classList.add('selected');
+        const radio = card.querySelector('input[type="radio"]');
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change'));
+    }
+
+    // When platform gamertag changes, update game gamertags that are marked "same as platform"
+    function syncGamertagsToPlatform() {
+        const platformValue = document.getElementById("platform_gamertag_input").value;
+        document.querySelectorAll('[data-same-as-platform]').forEach(input => {
+            if (input.disabled) {
+                input.value = platformValue;
+            }
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("platform_gamertag_input")?.addEventListener("input", syncGamertagsToPlatform);
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="form-container">
+        <h2 class="mb-4">Tell us where you play, {{ username }}!</h2>
+        <form method="POST">
+            {{ form.hidden_tag() }}
+
+            <h4>Select your platform</h4>
+            <div class="game-grid">
+                {% for subfield in form.platform %}
+                    <div class="game-card platform-card {% if subfield.checked %}selected{% endif %}"
+                         onclick="selectPlatform('{{ subfield.data }}', this)">
+                        <img src="{{ url_for('static', filename='platforms/' ~ ('Steam' if subfield.data == 'PC' else subfield.data) ~ 'Logo.png') }}"
+                             alt="{{ subfield.label.text }}">
+                        <div class="game-card-title">{{ 'Steam' if subfield.data == 'PC' else subfield.label.text }}</div>
+                        {{ subfield(class="hidden-radio") }}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.platform_gamertag.label(class="form-label") }}
+                {{ form.platform_gamertag(class="form-control", id="platform_gamertag_input") }}
+            </div>
+
+            <hr>
+
+            <h4 class="mb-3">Game-specific gamertags</h4>
+            {% if selected_games %}
+                {% for game in selected_games %}
+                    {% set field_name = game.lower().replace(' ', '_') %}
+                    <div class="mb-4">
+                        <label class="form-label d-flex align-items-center gap-2">
+                            <img src="{{ url_for('static', filename='images/' ~ image_map.get(game, game ~ '.png')) }}"
+                                 alt="{{ game }}" width="40" height="40" class="rounded">
+                            {{ 'Dead By Daylight' if game == 'DBD' else game }}
+                        </label>
+
+                        <div class="form-check">
+                            {{ form[field_name].same_as_platform(class="form-check-input", onchange="toggleInput(this, '{{ form[field_name].gamertag.id }}')") }}
+                            <label class="form-check-label">Same as platform gamertag</label>
+                        </div>
+
+                        {{ form[field_name].gamertag(class="form-control", id=form[field_name].gamertag.id, **{'data-same-as-platform': ''}) }}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No games were selected in the previous step.</p>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary mt-3">Submit</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

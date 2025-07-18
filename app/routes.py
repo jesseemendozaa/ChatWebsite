@@ -1,8 +1,10 @@
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, current_user, login_required
+from wtforms import FormField
 from app.models import User, Room
-from app.forms import RegistrationForm, LoginForm, RoomForm
+from app.forms import RegistrationForm, LoginForm, RoomForm,GameSelectionForm, GamertagForm, GameTagField
 from flask_socketio import join_room, leave_room, send, emit
+from flask import session
 import random
 import string
 import threading
@@ -27,12 +29,30 @@ def register():
         if existing_user:
             flash('Username already exists. Please choose another.')
             return redirect(url_for('register'))
+
         user = User(username=form.username.data, password=form.password.data)
         db.session.add(user)
         db.session.commit()
-        flash('Registration successful. Please log in.')
-        return redirect(url_for('login'))
+
+        # Store user ID in session and redirect to game selection
+        return redirect(url_for('select_games', user_id=user.id))
     return render_template('register.html', form=form)
+
+@myapp_obj.route('/select_games/<int:user_id>', methods=['GET', 'POST'])
+def select_games(user_id):
+    form = GameSelectionForm()
+    user = User.query.get(user_id)
+
+    if not user:
+        flash('User not found.')
+        return redirect(url_for('register'))
+
+    if form.validate_on_submit():
+        user.games = ', '.join(form.games.data)
+        db.session.commit()
+        return redirect(url_for('gamertags', user_id=user.id))  # Redirect to gamertag collection
+
+    return render_template('select_games.html', form=form, username=user.username)
 
 @myapp_obj.route('/login', methods=['GET', 'POST'])
 def login():
@@ -81,6 +101,77 @@ def chat(code):
 def send_user_list(room):
     user_list = list(room_users.get(room, []))
     emit('update_user_list', user_list, room=room)
+
+
+@myapp_obj.route('/gamertags/<int:user_id>', methods=['GET', 'POST'])
+def gamertags(user_id):
+    import json
+
+    user = User.query.get_or_404(user_id)
+    selected_games = user.games.split(', ') if user.games else []
+
+    image_map = {
+        'UNO': 'UNO.png',
+        'DBD': 'Dead_By_Daylight.png',
+        'Dead By Daylight': 'Dead_By_Daylight.png'
+    }
+
+    class DynamicGamertagForm(GamertagForm):
+        class Meta:
+            csrf = False
+
+    for game in selected_games:
+        field_name = game.lower().replace(" ", "_")
+        setattr(DynamicGamertagForm, field_name, FormField(GameTagField, label=game))
+
+    form = DynamicGamertagForm(request.form if request.method == 'POST' else None)
+
+    if request.method == 'POST':
+        print("POST received")
+        print("Platform:", form.platform.data)
+        print("Platform tag:", form.platform_gamertag.data)
+        for game in selected_games:
+            field = getattr(form, game.lower().replace(" ", "_"))
+            print(f"{game} same_as_platform:", field.same_as_platform.data)
+            print(f"{game} gamertag:", field.gamertag.data)
+
+        print("Form errors:", form.errors)
+
+        if form.validate():
+            user.platform = form.platform.data
+            user.platform_tag = form.platform_gamertag.data
+
+            gamertags = {}
+            for game in selected_games:
+                field = getattr(form, game.lower().replace(" ", "_"))
+                gamertags[game] = (
+                    user.platform_tag if field.same_as_platform.data
+                    else field.gamertag.data
+                )
+
+            user.game_tags = json.dumps(gamertags)
+            db.session.commit()
+
+            flash("Gamertags saved. You can now log in.")
+            print("Redirecting to login")  # debug
+            return redirect(url_for('login'))
+        else:
+            flash("Please correct the errors before submitting.")
+
+    platform_image_map = {
+        'Xbox': 'xboxLogo.png',
+        'PlayStation': 'PlayStationLogo.png',
+        'PC': 'SteamLogo.png'
+    }
+
+    return render_template(
+        'gamertags.html',
+        form=form,
+        username=user.username,
+        selected_games=selected_games,
+        image_map=image_map,
+        platform_image_map=platform_image_map
+    )
 
 # SocketIO Events
 @socketio.on('join_room')
