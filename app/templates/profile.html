@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Profile</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background-color: #000000;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .profile-card {
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(255, 255, 255, 0.1);
+            min-width: 350px;
+            text-align: left;
+        }
+
+        h2, h3 {
+            text-align: center;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+            display: block;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="profile-card">
+            <h2>User Profile</h2>
+            <p><strong>Website Username:</strong> {{ username }}</p>
+
+            {% set platform_display = {
+                'PC': 'Steam',
+                'Xbox': 'Xbox',
+                'PlayStation': 'PlayStation'
+            } %}
+
+            {% set platforms = current_user.platform.split(', ') if current_user.platform else [] %}
+            {% for platform in platforms %}
+                <p><strong>Platform:</strong> {{ platform_display.get(platform, platform) }}</p>
+                <p><strong>{{ platform_display.get(platform, platform) }} Gamertag:</strong> {{ platform_tag }}</p>
+            {% endfor %}
+
+            <h3>Game Gamertags</h3>
+            <ul>
+                {% for game in selected_games %}
+                    <li><strong>{{ game }}:</strong> {{ game_tags.get(game, 'N/A') }}</li>
+                {% endfor %}
+            </ul>
+
+            <a href="{{ url_for('lobby') }}">← Back to Lobby</a>
+        </div>
+    </div>
+</body>
+</html>

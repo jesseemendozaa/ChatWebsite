@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, SelectMultipleField, BooleanField, FieldList, FormField, RadioField
-from wtforms.validators import DataRequired, Length
+from wtforms import Form, BooleanField, StringField, PasswordField, SubmitField, SelectMultipleField, widgets, BooleanField, FieldList, FormField, RadioField, ValidationError
+from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import ListWidget, CheckboxInput
 
 class RegistrationForm(FlaskForm):
@@ -27,13 +27,29 @@ class RoomForm(FlaskForm):
     submit = SubmitField('Join or Create Room')
 
 # Optional: Define a small subform to hold per-game fields if you want to go dynamic
-class GameTagField(FlaskForm):
+class GameTagField(Form):
     same_as_platform = BooleanField('Same as platform gamertag')
     gamertag = StringField('Gamertag')
 
+    def validate(self):
+        # Always run base validations first
+        if not super().validate():
+            return False
+
+        # If "same as platform" is not checked, gamertag is required
+        if not self.same_as_platform.data and not self.gamertag.data:
+            self.gamertag.errors.append('Gamertag required if not same as platform')
+            return False
+
+        return True
+
 class GamertagForm(FlaskForm):
-    platform = RadioField('Platform', choices=[
-        ('Xbox', 'Xbox'), ('PlayStation', 'PlayStation'), ('PC', 'Steam')
-    ], validators=[DataRequired()])
+    platform = SelectMultipleField(
+        'Select your platform(s)',
+        choices=[('Xbox', 'Xbox'), ('PlayStation', 'PlayStation'), ('PC', 'PC')],
+        validators=[DataRequired(message="Please select at least one platform.")],
+        option_widget=widgets.CheckboxInput(),
+        widget=widgets.ListWidget(prefix_label=False)
+    )
     platform_gamertag = StringField('Platform Gamertag', validators=[DataRequired()])
     submit = SubmitField('Submit')

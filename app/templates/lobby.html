@@ -11,17 +11,15 @@
         margin: 0;
         padding: 0;
         height: 100vh;
-    }
-
-    body {
-        background: #121212;
+        background-color: #000000; /* Entire page is black */
     }
 
     .container {
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 90vh;
+        height: 100vh;
+        position: relative;
     }
 
     .form-container {
@@ -38,11 +36,34 @@
     .form-group {
         margin-bottom: 15px;
     }
+
+    .top-right-profile {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+    }
+
+    .btn-profile {
+        background-color: #6c757d;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 5px;
+        text-decoration: none;
+    }
+
+    .btn-profile:hover {
+        background-color: #5a6268;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
+    <!-- View Profile button (top-right) -->
+    <div class="top-right-profile">
+        <a href="{{ url_for('profile') }}" class="btn-profile">View Profile</a>
+    </div>
+
     <div class="form-container">
         <h3>Welcome, {{ current_user.username }}!</h3>
         <form method="POST">

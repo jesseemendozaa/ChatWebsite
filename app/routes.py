@@ -2,13 +2,14 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, current_user, login_required
 from wtforms import FormField
 from app.models import User, Room
-from app.forms import RegistrationForm, LoginForm, RoomForm,GameSelectionForm, GamertagForm, GameTagField
+from app.forms import RegistrationForm, LoginForm, RoomForm, GameSelectionForm, GamertagForm, GameTagField
 from flask_socketio import join_room, leave_room, send, emit
 from flask import session
 import random
 import string
 import threading
 import time
+import json
 
 # Delay imports to avoid circular
 from app import myapp_obj, db, socketio
@@ -34,7 +35,6 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        # Store user ID in session and redirect to game selection
         return redirect(url_for('select_games', user_id=user.id))
     return render_template('register.html', form=form)
 
@@ -50,7 +50,7 @@ def select_games(user_id):
     if form.validate_on_submit():
         user.games = ', '.join(form.games.data)
         db.session.commit()
-        return redirect(url_for('gamertags', user_id=user.id))  # Redirect to gamertag collection
+        return redirect(url_for('gamertags', user_id=user.id))
 
     return render_template('select_games.html', form=form, username=user.username)
 
@@ -88,6 +88,24 @@ def lobby():
         return redirect(url_for('chat', code=code))
     return render_template('lobby.html', form=form)
 
+@myapp_obj.route('/profile')
+@login_required
+def profile():
+    import json
+
+    user = current_user
+    platform_tag = user.platform_tag
+    selected_games = user.games.split(', ') if user.games else []
+    game_tags = json.loads(user.game_tags) if user.game_tags else {}
+
+    return render_template(
+        'profile.html',
+        username=user.username,
+        platform_tag=platform_tag,
+        selected_games=selected_games,
+        game_tags=game_tags
+    )
+
 @myapp_obj.route('/chat/<code>')
 @login_required
 def chat(code):
@@ -97,15 +115,10 @@ def chat(code):
         return redirect(url_for('lobby'))
     return render_template('chat.html', username=current_user.username, code=code)
 
-# Helper function to broadcast user list
-def send_user_list(room):
-    user_list = list(room_users.get(room, []))
-    emit('update_user_list', user_list, room=room)
-
-
 @myapp_obj.route('/gamertags/<int:user_id>', methods=['GET', 'POST'])
 def gamertags(user_id):
     import json
+    from flask import current_app
 
     user = User.query.get_or_404(user_id)
     selected_games = user.games.split(', ') if user.games else []
@@ -118,27 +131,33 @@ def gamertags(user_id):
 
     class DynamicGamertagForm(GamertagForm):
         class Meta:
-            csrf = False
+            csrf = False  # only for local testing convenience
 
+    # Dynamically add game fields
     for game in selected_games:
         field_name = game.lower().replace(" ", "_")
         setattr(DynamicGamertagForm, field_name, FormField(GameTagField, label=game))
 
-    form = DynamicGamertagForm(request.form if request.method == 'POST' else None)
+    form = DynamicGamertagForm()
+
+    # Prevent Jinja error on first GET render
+    if not form.platform.data:
+        form.platform.data = []
 
     if request.method == 'POST':
-        print("POST received")
-        print("Platform:", form.platform.data)
-        print("Platform tag:", form.platform_gamertag.data)
+        current_app.logger.info("====== POST received ======")
+        current_app.logger.info(f"Platform: {form.platform.data}")
+        current_app.logger.info(f"Platform tag: {form.platform_gamertag.data}")
         for game in selected_games:
             field = getattr(form, game.lower().replace(" ", "_"))
-            print(f"{game} same_as_platform:", field.same_as_platform.data)
-            print(f"{game} gamertag:", field.gamertag.data)
+            current_app.logger.info(f"{game} same_as_platform: {field.same_as_platform.data}")
+            current_app.logger.info(f"{game} gamertag: {field.gamertag.data}")
+        current_app.logger.info(f"Form errors: {form.errors}")
 
-        print("Form errors:", form.errors)
+        if form.validate_on_submit():
+            current_app.logger.info("✅ Form validated successfully. Proceeding to save and redirect.")
 
-        if form.validate():
-            user.platform = form.platform.data
+            user.platform = ', '.join(form.platform.data or [])
             user.platform_tag = form.platform_gamertag.data
 
             gamertags = {}
@@ -153,10 +172,9 @@ def gamertags(user_id):
             db.session.commit()
 
             flash("Gamertags saved. You can now log in.")
-            print("Redirecting to login")  # debug
             return redirect(url_for('login'))
-        else:
-            flash("Please correct the errors before submitting.")
+
+        current_app.logger.warning("❌ Form did not validate. Staying on page.")
 
     platform_image_map = {
         'Xbox': 'xboxLogo.png',
@@ -173,7 +191,8 @@ def gamertags(user_id):
         platform_image_map=platform_image_map
     )
 
-# SocketIO Events
+# ------------------ SocketIO Events ------------------
+
 @socketio.on('join_room')
 def handle_join(data):
     username = data['username']
@@ -182,7 +201,6 @@ def handle_join(data):
 
     user_rooms[request.sid] = {'room': room, 'username': username}
 
-    # Add user to room_users
     if room not in room_users:
         room_users[room] = set()
     room_users[room].add(username)
@@ -223,7 +241,6 @@ def handle_leave(data):
         else:
             send_user_list(room)
 
-    # Check if room empty and clear
     if room in socketio.server.manager.rooms.get('/', {}):
         if len(socketio.server.manager.rooms['/'][room]) == 0:
             if room in room_messages:
@@ -253,7 +270,6 @@ def handle_disconnect():
             else:
                 send_user_list(room)
 
-        # ✅ Immediately check and clear room messages if empty
         if room in socketio.server.manager.rooms.get('/', {}):
             if len(socketio.server.manager.rooms['/'][room]) == 0:
                 if room in room_messages:
